@@ -4,6 +4,10 @@ This directory contains helper scripts used by the GitHub Copilot Coder workflow
 
 ## 📋 Scripts Overview
 
+### Runner Setup Scripts (One-Time Installation)
+- `setup-runner.sh` - **NEW**: Automated setup for Linux/Mac runners
+- `setup-runner.ps1` - **NEW**: Automated setup for Windows runners
+
 ### Deployment Scripts
 - `deploy-to-repo.ps1` - PowerShell script to deploy workflows to a target repository
 - `deploy-to-repo.sh` - Bash script to deploy workflows to a target repository
@@ -12,6 +16,123 @@ This directory contains helper scripts used by the GitHub Copilot Coder workflow
 - `prepare-commit.sh` - Prepares and commits changes with co-author attribution
 - `push-branch.sh` - Pushes feature branch to remote repository
 - `post-workflow-comment.sh` - Posts completion comment to GitHub issue
+
+---
+
+## 🖥️ Runner Setup Scripts
+
+### `setup-runner.sh` (Linux/Mac)
+
+**⚠️ NEW - REQUIRED FOR ALL RUNNERS**
+
+One-time installation script that pre-installs all required software on Linux/Mac self-hosted runners. This must be run before executing any workflows.
+
+**Prerequisites:** 
+- Sudo access to the runner VM
+- Internet access (or pre-downloaded installers)
+
+**Usage:**
+```bash
+sudo ./scripts/setup-runner.sh
+```
+
+**What it installs:**
+- GitHub CLI (gh) v2.62.0
+- Node.js 22.x
+- Python 3.x
+- uv/uvx (Python package installer)
+- GitHub Copilot CLI v0.0.352
+
+**Supported OS:**
+- Ubuntu/Debian (apt-based)
+- RHEL/CentOS/Fedora (yum-based)
+
+**Features:**
+- Automatic OS detection
+- Version checking (skips if already installed)
+- Colored output for readability
+- Comprehensive error handling
+- Installation summary
+
+**Example:**
+```bash
+# SSH into your runner VM
+ssh runner@runner-vm
+
+# Clone or download GHES_CodingAgent
+git clone https://ghes.company.com/myorg/GHES_CodingAgent.git
+cd GHES_CodingAgent
+
+# Run the setup script
+sudo ./scripts/setup-runner.sh
+```
+
+**Verification:**
+After running the script, verify all software:
+```bash
+gh --version
+node --version
+npm --version
+python3 --version
+uv --version
+copilot --version
+```
+
+### `setup-runner.ps1` (Windows)
+
+**⚠️ NEW - REQUIRED FOR ALL WINDOWS RUNNERS**
+
+One-time installation script that pre-installs all required software on Windows self-hosted runners. This must be run before executing any workflows.
+
+**Prerequisites:** 
+- Administrator privileges
+- Internet access (or pre-downloaded installers)
+
+**Usage:**
+```powershell
+# Run PowerShell as Administrator
+.\scripts\setup-runner.ps1
+```
+
+**What it installs:**
+- GitHub CLI (gh) v2.62.0
+- Node.js 22.x
+- Python 3.x
+- uv/uvx (Python package installer)
+- GitHub Copilot CLI v0.0.352
+
+**Features:**
+- Administrator check
+- Version checking (skips if already installed)
+- Colored output for readability
+- Comprehensive error handling
+- Installation summary
+
+**Example:**
+```powershell
+# RDP into your runner machine
+# Open PowerShell as Administrator
+
+# Clone or download GHES_CodingAgent
+git clone https://ghes.company.com/myorg/GHES_CodingAgent.git
+cd GHES_CodingAgent
+
+# Run the setup script
+.\scripts\setup-runner.ps1
+```
+
+**Verification:**
+After running the script, verify all software:
+```powershell
+gh --version
+node --version
+npm --version
+python --version
+uv --version
+copilot --version
+```
+
+---
 
 ## 🚀 Deployment Scripts
 
