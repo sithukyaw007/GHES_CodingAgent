@@ -32,49 +32,271 @@ This repository implements an automated coding workflow using **GitHub Copilot C
 - 📝 **Detailed feedback** - Posts actionable comments with examples
 - 📊 **Artifact logs** - Complete analysis available for reference
 
-## 🚀 Quick Start
+---
 
-### 1️⃣ Setup (One Time)
+## 🛠️ Getting Started Guide
 
-#### ⚠️ IMPORTANT: Self-Hosted Runner Prerequisites
+This section walks you through the complete setup process, from infrastructure to running your first Copilot workflow.
 
-If using **self-hosted runners**, you MUST manually install GitHub CLI on the runner VM before running workflows:
+### 📊 Setup Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        COMPLETE SETUP JOURNEY                               │
+│                                                                             │
+│  PHASE 0: Prerequisites          PHASE 1: Configuration    PHASE 2: Usage  │
+│  (One-time infrastructure)       (One-time setup)          (Daily use)     │
+│                                                                             │
+│  ┌─────────────────────┐        ┌──────────────────┐      ┌─────────────┐  │
+│  │ 0.1 GHES Instance   │        │ 1.1 Clone Repo   │      │ Create      │  │
+│  │ 0.2 Self-Hosted     │───────▶│ 1.2 Add Secrets  │─────▶│ Issue +     │  │
+│  │     Runner VM       │        │ 1.3 Deploy to    │      │ Add Label   │  │
+│  │ 0.3 Network Access  │        │     Target Repos │      │ = Done! ✨  │  │
+│  └─────────────────────┘        └──────────────────┘      └─────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📦 Phase 0: Prerequisites (Infrastructure Setup)
+
+> **⏱️ Time Required:** 1-2 hours (one-time setup)
+
+Before using the Copilot workflows, you need to set up the required infrastructure.
+
+### 0.1 GitHub Enterprise Server Requirements
+
+Ensure your GHES instance is properly configured:
+
+| Requirement | Details | How to Verify |
+|-------------|---------|---------------|
+| **GHES Version** | 3.x or later recommended | Check admin dashboard |
+| **GitHub Actions** | Must be enabled at org level | **Settings → Actions → General** |
+| **GitHub Copilot** | Enterprise/Organization license | **Settings → Copilot** |
+| **Reusable Workflows** | Must allow cross-repo workflows | **Settings → Actions → General → Access** |
+
+### 0.2 Self-Hosted Runner Setup
+
+The workflows require a self-hosted runner. Follow these steps to set one up:
+
+#### Step 1: Provision a Server
+
+| Specification | Minimum | Recommended |
+|---------------|---------|-------------|
+| **OS** | Ubuntu 20.04 LTS | Ubuntu 22.04 LTS |
+| **vCPUs** | 2 | 4+ |
+| **RAM** | 4 GB | 8+ GB |
+| **Disk** | 50 GB | 100+ GB SSD |
+| **Network** | Outbound HTTPS | Low-latency connection |
+
+#### Step 2: Register the Runner with GHES
 
 ```bash
-# SSH into your runner VM and run:
+# 1. Go to your GHES organization settings:
+#    https://<your-ghes-host>/<org>/settings/actions/runners/new
+
+# 2. Download and extract the runner package (commands shown in GHES UI)
+mkdir actions-runner && cd actions-runner
+curl -o actions-runner-linux-x64-2.311.0.tar.gz -L <download-url-from-ghes>
+tar xzf ./actions-runner-linux-x64-2.311.0.tar.gz
+
+# 3. Configure the runner
+./config.sh --url https://<your-ghes-host>/<org> --token <token-from-ghes>
+
+# 4. Install and start as a service (recommended for production)
+sudo ./svc.sh install
+sudo ./svc.sh start
+
+# 5. Verify runner is online
+sudo ./svc.sh status
+```
+
+#### Step 3: Install Required Software on Runner
+
+```bash
+# ============================================
+# REQUIRED: GitHub CLI (gh) - MUST pre-install
+# ============================================
+# Enterprise networks often block npm during workflow execution,
+# so GitHub CLI must be installed beforehand.
+
 GH_VERSION="2.62.0"
 cd /tmp
 curl -L -o gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"
 tar -xzf gh.tar.gz
 sudo mv gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/
 sudo chmod +x /usr/local/bin/gh
+
+# Verify installation
 gh --version
+
+# ============================================
+# VERIFY: Standard tools (usually pre-installed)
+# ============================================
+git --version      # Required for repository operations
+curl --version     # Required for API calls
+jq --version       # Optional but helpful for debugging
 ```
 
-**Why?** Enterprise networks often block internet access during workflow execution, preventing automatic installation.
+> **Note:** Node.js, Python, Copilot CLI, and MCP servers are installed **automatically** by the workflow - you don't need to pre-install them.
 
-See [GHES Setup Guide - Self-Hosted Runners](docs/GHES-SETUP.md#self-hosted-runners) for detailed instructions.
+### 0.3 Network & Firewall Configuration
+
+Your self-hosted runner needs outbound HTTPS access to these endpoints:
+
+| Service | Hostname | Port | Purpose |
+|---------|----------|------|---------|
+| **Your GHES** | `<your-ghes-host>` | 443 | Git operations, API calls |
+| **npm Registry** | `registry.npmjs.org` | 443 | Download Copilot CLI |
+| **PyPI** | `pypi.org`, `files.pythonhosted.org` | 443 | Download MCP servers |
+| **Copilot API** | `copilot-api.github.com` | 443 | AI code generation |
+| **Context7** | `api.context7.com` | 443 | Documentation (optional) |
+
+#### If Behind a Corporate Proxy
+
+Add these to your runner's environment (`~/.bashrc` or `/etc/environment`):
+
+```bash
+export HTTP_PROXY="http://proxy.company.com:8080"
+export HTTPS_PROXY="http://proxy.company.com:8080"
+export NO_PROXY="<your-ghes-host>,localhost,127.0.0.1"
+```
+
+#### Firewall Rules (if applicable)
+
+```bash
+# Example iptables rules (adjust for your firewall)
+sudo iptables -A OUTPUT -p tcp --dport 443 -d registry.npmjs.org -j ACCEPT
+sudo iptables -A OUTPUT -p tcp --dport 443 -d pypi.org -j ACCEPT
+sudo iptables -A OUTPUT -p tcp --dport 443 -d copilot-api.github.com -j ACCEPT
+```
+
+### ✅ Phase 0 Checklist
+
+Before proceeding, verify all prerequisites are met:
+
+- [ ] GHES instance is running with Actions enabled
+- [ ] Self-hosted runner is registered and online (green status in GHES)
+- [ ] GitHub CLI (`gh`) is installed on the runner
+- [ ] Network connectivity verified (can reach npmjs.org, pypi.org, etc.)
+- [ ] GitHub Copilot is enabled for your organization
 
 ---
 
-1. **Configure Organization or Repository Secrets**
-   
-   Go to **Settings** → **Secrets and variables** → **Actions**:
-   
-   | Secret | Required | Description |
-   |--------|----------|-------------|
-   | `GH_TOKEN` | ✅ Yes | **Classic PAT** from your GHES instance (⚠️ NOT github.com) |
-   | `COPILOT_TOKEN` | ✅ Yes | Token for GitHub Copilot API access |
-   | `CONTEXT7_API_KEY` | ❌ Optional | Context7 API key for documentation |
+## ⚙️ Phase 1: Configuration (One-Time Setup)
 
-   **⚠️ CRITICAL: Use Classic PAT for GH_TOKEN**
-   
-   The `GH_TOKEN` **must be a Classic PAT** created on your GHES instance:
-   1. Go to `https://<your-ghes-instance>/settings/tokens`
-   2. Click **"Generate new token"** → **"Generate new token (classic)"**
-   3. Select scopes: `repo` and `workflow`
-   
-   > **Note**: Fine-grained PATs have issues with GraphQL operations on GHES. Always use Classic PATs.
+> **⏱️ Time Required:** 15-30 minutes
+
+### 1.1 Clone This Repository to Your Organization
+
+First, get the `GHES_CodingAgent` repository into your GHES organization:
+
+**Option A: Clone via Git (Recommended)**
+
+```bash
+# Clone from source
+git clone https://github.com/original/GHES_CodingAgent.git
+cd GHES_CodingAgent
+
+# Push to your GHES organization
+git remote set-url origin https://<your-ghes-host>/<your-org>/GHES_CodingAgent.git
+git push -u origin main
+```
+
+**Option B: For Air-Gapped Environments**
+
+1. Download this repository as a ZIP file
+2. Create a new repository named `GHES_CodingAgent` in your GHES org
+3. Upload/push all files to the new repository
+
+### 1.2 Configure the Central Repository
+
+After cloning, configure the `GHES_CodingAgent` repository in your org:
+
+#### Enable Cross-Repository Workflow Access
+
+1. Go to **Settings → Actions → General**
+2. Under "Access", select **"Accessible from repositories in the organization"**
+3. Click **Save**
+
+#### Add Organization or Repository Secrets
+
+Go to **Settings → Secrets and variables → Actions** and add:
+
+| Secret | Required | Description | How to Get |
+|--------|----------|-------------|------------|
+| `GH_TOKEN` | ✅ Yes | Classic PAT with `repo` and `workflow` scopes | See below |
+| `COPILOT_TOKEN` | ✅ Yes | Token for GitHub Copilot API access | From Copilot settings |
+| `CONTEXT7_API_KEY` | ❌ Optional | Context7 API key for enhanced docs | [context7.com](https://context7.com) |
+
+#### Creating the GH_TOKEN (Classic PAT)
+
+> ⚠️ **CRITICAL:** Must be a **Classic PAT** from your GHES instance. Fine-grained PATs have GraphQL issues on GHES.
+
+1. Go to `https://<your-ghes-host>/settings/tokens`
+2. Click **"Generate new token"** → **"Generate new token (classic)"**
+3. Set a descriptive name (e.g., "Copilot Workflows Token")
+4. Set expiration (recommend 90 days or longer)
+5. Select scopes:
+   - ✅ `repo` (Full control of private repositories)
+   - ✅ `workflow` (Update GitHub Action workflows)
+6. Click **Generate token**
+7. Copy and save the token securely
+8. Add it as a secret named `GH_TOKEN`
+
+### 1.3 Deploy to Target Repositories
+
+Use the deployment scripts to install Copilot workflows into other repositories:
+
+#### Using Bash (Linux/Mac/Git Bash)
+
+```bash
+./scripts/deploy-to-repo.sh \
+    <ghes-host> \
+    <your-org> \
+    <target-repo> \
+    <gh-token>
+
+# Example:
+./scripts/deploy-to-repo.sh ghes.company.com myorg my-project ghp_xxxxxxxxxxxx
+```
+
+#### Using PowerShell (Windows)
+
+```powershell
+.\scripts\deploy-to-repo.ps1 `
+    -GhesHost "ghes.company.com" `
+    -Owner "myorg" `
+    -Repo "my-project" `
+    -GhToken "ghp_xxxxxxxxxxxx"
+```
+
+The script will:
+1. ✅ Clone the target repository
+2. ✅ Copy lightweight caller workflow files
+3. ✅ Create required labels (`copilot`, `in-progress`, `ready-for-review`)
+4. ✅ Create a Pull Request with setup instructions
+
+**After running the script:**
+1. Review and merge the created PR
+2. Add the same secrets (`GH_TOKEN`, `COPILOT_TOKEN`) to the target repository
+
+### ✅ Phase 1 Checklist
+
+- [ ] `GHES_CodingAgent` repository cloned to your GHES org
+- [ ] Workflow access enabled ("Accessible from repositories in the organization")
+- [ ] Secrets configured (`GH_TOKEN`, `COPILOT_TOKEN`)
+- [ ] Target repository(ies) have caller workflows deployed
+- [ ] Target repository(ies) have secrets configured
+
+---
+
+## 🚀 Phase 2: Quick Start (Daily Usage)
+
+> **⏱️ Time Required:** 2-3 minutes per issue
+
+Now you're ready to use Copilot! Here's how:
 
 ### 2️⃣ Create an Issue
 
@@ -120,9 +342,11 @@ The workflow will automatically:
 3. Test the implementation
 4. Approve and merge when ready
 
-## 🚀 Deployment Guide
+---
 
-This section explains how to deploy the Copilot workflows to repositories in your organization.
+## 🚀 Deployment Guide (Reference)
+
+> **Note:** If you followed the Phase 0 and Phase 1 steps above, you've already completed the deployment! This section provides additional details for reference.
 
 ### Deployment Architecture
 
@@ -143,99 +367,26 @@ This section explains how to deploy the Copilot workflows to repositories in you
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Step 1️⃣: Clone This Repository to Your Organization
-
-First, clone or fork this repository into your GHES organization:
-
-**Option A: Clone via GHES UI**
-1. Create a new repository named `GHES_CodingAgent` in your org
-2. Clone this repo locally and push to your GHES instance:
-   ```bash
-   git clone https://github.com/original/GHES_CodingAgent.git
-   cd GHES_CodingAgent
-   git remote set-url origin https://<your-ghes>/your-org/GHES_CodingAgent.git
-   git push -u origin main
-   ```
-
-**Option B: For Air-Gapped Environments**
-1. Download this repository as a ZIP
-2. Create a new repository in your GHES org
-3. Upload/push all files to the new repository
-
-**Option C: Fork (if available)**
-- Fork directly within GHES if the source repo is accessible
-
-### Step 2️⃣: Configure the Central Repository
-
-After cloning to your org, configure the `GHES_CodingAgent` repository:
-
-1. **Enable Workflow Access** (Required for reusable workflows)
-   - Go to **Settings → Actions → General**
-   - Under "Access", select **"Accessible from repositories in the organization"**
-   
-2. **Add Organization Secrets**
-   - `GH_TOKEN`: Classic PAT with `repo` and `workflow` scopes
-   - `COPILOT_TOKEN`: Token for Copilot API access
-   - `CONTEXT7_API_KEY`: (Optional) Context7 API key
-
-### Step 3️⃣: Deploy to Target Repositories
-
-Use the deployment scripts to install Copilot workflows into other repositories in your org:
-
-#### PowerShell (Windows)
-
-```powershell
-./scripts/deploy-to-repo.ps1 `
-    -GhesHost "ghes.company.com" `
-    -Owner "my-org" `
-    -Repo "my-project" `
-    -GhToken "ghp_xxxxxxxxxxxx"
-```
-
-#### Bash (Linux/Mac/Git Bash)
-
-```bash
-./scripts/deploy-to-repo.sh \
-    ghes.company.com \
-    my-org \
-    my-project \
-    ghp_xxxxxxxxxxxx
-```
-
-### What Gets Deployed
-
-The scripts deploy **lightweight caller workflows** to target repositories:
+### What Gets Deployed to Target Repositories
 
 | File | Size | Description |
 |------|------|-------------|
 | `.github/workflows/copilot-coder.yml` | ~30 lines | Calls master coder workflow |
 | `.github/workflows/copilot-reviewer.yml` | ~35 lines | Calls master reviewer workflow |
 
-### Step 4️⃣: Configure Target Repository Secrets
-
-After merging the deployment PR, add secrets to the target repository:
-
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `GH_TOKEN` | ✅ Yes | Classic PAT with `repo` and `workflow` scopes |
-| `COPILOT_TOKEN` | ✅ Yes | Token for Copilot API access |
-| `CONTEXT7_API_KEY` | ❌ Optional | Context7 API key for documentation |
-
-### Step 5️⃣: Start Using Copilot!
-
-1. Create an issue in your target repository
-2. Add the `copilot` label
-3. Watch Copilot generate code and create a PR!
-
 ### Benefits of This Architecture
 
 | Benefit | Description |
 |---------|-------------|
 | **Centralized Updates** | Update master workflows once, all repos get improvements |
-| **Minimal Footprint** | Target repos only have ~4 small files |
+| **Minimal Footprint** | Target repos only have 2 small YAML files |
 | **No Script Duplication** | Scripts live only in central repo |
 | **Easy Rollout** | Deploy to new repos in seconds |
 | **Version Control** | Pin to specific tags/commits if needed |
+
+For detailed deployment instructions, see [Deployment Guide](docs/DEPLOYMENT.md).
+
+---
 
 ## 🤖 Copilot PR Reviewer (On-Demand)
 
@@ -508,11 +659,13 @@ permissions:
 
 Detailed guides are available in the `docs/` directory:
 
-- **[GHES Setup Guide](docs/GHES-SETUP.md)** - Complete setup instructions
-- **[Copilot PR Reviewer Guide](docs/COPILOT-REVIEWER.md)** - Automated PR review
-- **[Migration Guide](docs/MIGRATION-GUIDE.md)** - Migrate from Azure DevOps
-- **[Reviewer Migration Guide](docs/REVIEWER-MIGRATION.md)** - ADO Reviewer adaptation details
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+| Document | Description |
+|----------|-------------|
+| **[Technical Overview](docs/TECHNICAL-OVERVIEW.md)** | Deep-dive into architecture, MCP servers, and data flow |
+| **[GHES Setup Guide](docs/GHES-SETUP.md)** | Complete setup instructions for GHES |
+| **[Deployment Guide](docs/DEPLOYMENT.md)** | Deploying workflows to repositories |
+| **[Copilot PR Reviewer Guide](docs/COPILOT-REVIEWER.md)** | Automated PR review documentation |
+| **[Troubleshooting](docs/TROUBLESHOOTING.md)** | Common issues and solutions |
 
 ## 🆘 Troubleshooting
 
