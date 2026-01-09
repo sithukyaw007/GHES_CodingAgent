@@ -4,16 +4,24 @@ This guide explains how to set up the GitHub Copilot Coder workflow on GitHub En
 
 ## 📋 Prerequisites
 
-### Required Software
-- GitHub Enterprise Server (GHES) instance
-- GitHub Copilot CLI access
-- Node.js 22.x (installed automatically by workflow)
-- Python 3.x (installed automatically by workflow)
+### Required Software on Self-Hosted Runner
+
+All software must be pre-installed on the runner using the provided setup script. The workflows verify software availability but do not install it at runtime.
+
+**Setup Script:** `scripts/setup-runner.sh` (Linux/Mac) or `scripts/setup-runner.ps1` (Windows)
+
+The following software will be installed by the setup script:
+- GitHub CLI (gh) v2.62.0
+- Node.js 22.x
+- Python 3.x
+- uv/uvx (Python package installer)
+- GitHub Copilot CLI
 
 ### Required Permissions
 - Repository admin access
 - Ability to create GitHub Actions workflows
 - Ability to configure repository secrets
+- SSH/RDP access to self-hosted runner (for one-time setup)
 
 ## 🔐 Step 1: Configure Organization or Repository Secrets
 
@@ -47,7 +55,81 @@ Navigate to your repository **Settings** → **Secrets and variables** → **Act
    - **Required for**: Enhanced documentation lookup
    - **How to get**: Sign up at [Context7](https://context7.com)
 
-## ⚙️ Step 2: Verify Workflow Configuration
+## 🎯 Step 3: Set Up Self-Hosted Runner
+
+Before running any workflows, you **must** pre-install all required software on your self-hosted runner.
+
+### Automated Setup (Recommended)
+
+We provide automated setup scripts that install all required software in one command.
+
+#### For Linux/Mac Runners
+
+SSH into your runner VM and execute:
+
+```bash
+# Clone the GHES_CodingAgent repository
+git clone https://<your-ghes-host>/<your-org>/GHES_CodingAgent.git
+cd GHES_CodingAgent
+
+# Run the setup script with sudo
+sudo ./scripts/setup-runner.sh
+```
+
+#### For Windows Runners
+
+RDP into your runner machine, open PowerShell as Administrator, and execute:
+
+```powershell
+# Clone the GHES_CodingAgent repository
+git clone https://<your-ghes-host>/<your-org>/GHES_CodingAgent.git
+cd GHES_CodingAgent
+
+# Run the setup script
+.\scripts\setup-runner.ps1
+```
+
+### What Gets Installed
+
+The setup script installs:
+
+1. **GitHub CLI (gh)** - v2.62.0 - For GitHub API operations
+2. **Node.js** - v22.x - Required for Copilot CLI
+3. **Python** - v3.x - Required for uv/uvx
+4. **uv/uvx** - Latest - Python package installer
+5. **GitHub Copilot CLI** - v0.0.352 - The AI coding assistant
+
+### Verification
+
+After running the setup script, verify all software is installed:
+
+```bash
+# On Linux/Mac
+gh --version
+node --version
+npm --version
+python3 --version
+uv --version
+copilot --version
+```
+
+```powershell
+# On Windows (PowerShell)
+gh --version
+node --version
+npm --version
+python --version
+uv --version
+copilot --version
+```
+
+All commands should return version information without errors.
+
+### Manual Installation (If Automatic Fails)
+
+If the automated setup fails due to network restrictions, you can manually install each component. Refer to the setup script source code for the exact versions and installation steps.
+
+---
 
 The workflow file is located at `.github/workflows/copilot-coder.yml`.
 
@@ -56,7 +138,7 @@ The workflow file is located at `.github/workflows/copilot-coder.yml`.
 ```yaml
 env:
   MODEL: claude-haiku-4.5          # LLM model to use
-  COPILOT_VERSION: 0.0.352         # Copilot CLI version
+  COPILOT_VERSION: 0.0.352         # Copilot CLI version (for reference only)
 ```
 
 ### Customization Options
@@ -64,10 +146,11 @@ env:
 You can customize the workflow by editing these environment variables:
 
 - **`MODEL`**: Change the LLM model (e.g., `claude-sonnet-4`, `gpt-4`)
-- **`COPILOT_VERSION`**: Pin to a specific Copilot CLI version
-- **`NPM_GLOBAL_PATH`**: Customize NPM global package path (auto-detected)
+- **`COPILOT_VERSION`**: Reference version (software is pre-installed on runner)
 
-## 🎯 Step 3: Understand MCP Server Configuration
+**Note:** The `COPILOT_VERSION` variable is now informational only. The actual version used is whatever is pre-installed on the runner via the setup script.
+
+## 🎯 Step 5: Understand MCP Server Configuration
 
 The workflow uses MCP (Model Context Protocol) servers for enhanced functionality like documentation lookup and web content retrieval.
 
@@ -96,7 +179,7 @@ To modify MCP configuration for all repositories:
 2. Changes apply automatically to all subsequent workflow runs
 ```
 
-## 📝 Step 4: Create Issues for Copilot
+## 🎯 Step 5: Understand MCP Server Configuration
 
 ### Creating an Issue
 
@@ -121,7 +204,7 @@ The workflow manages issue states using labels:
 - **`in-progress`**: Workflow adds when code generation starts
 - **`ready-for-review`**: Workflow adds when PR is created
 
-## 🔍 Step 5: Monitor Workflow Execution
+## 📝 Step 6: Create Issues for Copilot
 
 ### Viewing Workflow Runs
 
@@ -136,20 +219,17 @@ The workflow executes the following steps:
 1. 🚀 Start Workflow
 2. 📥 Checkout Repository
 3. 🏷️ Update Issue Labels - In Progress
-4. 🐍 Setup Python
-5. 📦 Install uv/uvx
-6. ⚙️ Setup Node.js
-7. 📦 Install Copilot CLI (with caching)
-8. ⚙️ Configure MCP Servers (fetched from central repo)
-9. 🧰 Check MCP Access
-10. 🌿 Create Feature Branch
-11. 🤖 Implement Changes with Copilot
-12. 💾 Commit Changes
-13. 🚀 Push Branch
-14. 📬 Create Pull Request
-15. 💬 Add Completion Comment to Issue
-16. 🏷️ Update Issue Labels - Completed
-17. 📦 Publish Logs
+4. ✅ Verify Pre-installed Software (Node.js, Python, uv, Copilot CLI)
+5. ⚙️ Configure MCP Servers (fetched from central repo)
+6. 🧰 Check MCP Access
+7. 🌿 Create Feature Branch
+8. 🤖 Implement Changes with Copilot
+9. 💾 Commit Changes
+10. 🚀 Push Branch
+11. 📬 Create Pull Request
+12. 💬 Add Completion Comment to Issue
+13. 🏷️ Update Issue Labels - Completed
+14. 📦 Publish Logs
 
 ### Accessing Logs
 
@@ -159,7 +239,7 @@ Workflow logs are published as artifacts:
 2. Scroll to **Artifacts** section
 3. Download **copilot-logs** artifact
 
-## 🧪 Step 6: Test the Setup
+## 🔍 Step 7: Monitor Workflow Execution
 
 Create a simple test issue to verify the setup:
 
@@ -186,7 +266,7 @@ Create a simple "Hello World" Python script.
 3. Wait for the workflow to complete
 4. Review the generated PR
 
-## 🔒 Security Considerations
+## 🧪 Step 8: Test the Setup
 
 ### Token Security
 
@@ -216,66 +296,50 @@ If your GHES instance uses a custom hostname, ensure:
 2. Git remote URLs point to your GHES instance
 3. API calls use your GHES hostname
 
-### Self-Hosted Runners
+### Self-Hosted Runners - Pre-Installation Required
 
-⚠️ **CRITICAL REQUIREMENT**: If using self-hosted runners, you **MUST** manually install GitHub CLI before running any workflows.
+⚠️ **CRITICAL REQUIREMENT**: All required software must be pre-installed on self-hosted runners using the provided setup scripts.
 
-#### Why Manual Installation is Required
+#### Why Pre-Installation is Required
 
 Enterprise networks typically:
 - Block outbound internet access during workflow execution
 - Require proxy configuration for external downloads
-- Have slow or restricted access to package repositories (npm, apt)
+- Have slow or restricted access to package repositories (npm, apt, pip)
+- Experience timeouts when installing software during workflow runs
 
-Automatic installation during workflow runs will fail or timeout in these environments.
+**Solution:** Install all software once on the runner using the automated setup script.
 
-#### Required: GitHub CLI (`gh`)
+#### Automated Setup (Recommended)
 
-The GitHub CLI must be pre-installed on self-hosted runners. It cannot be installed during workflow execution due to network restrictions in most enterprise environments.
-
-**Installation steps** (run on the runner VM):
+**For Linux/Mac runners:**
 
 ```bash
-# Download GitHub CLI
-GH_VERSION="2.62.0"
-cd /tmp
-curl -L -o gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"
-
-# Extract and install
-tar -xzf gh.tar.gz
-sudo mv gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/
-sudo chmod +x /usr/local/bin/gh
-
-# Cleanup
-rm -rf gh.tar.gz gh_${GH_VERSION}_linux_amd64
-
-# Verify installation
-gh --version
+# On the runner VM
+git clone https://<your-ghes-host>/<your-org>/GHES_CodingAgent.git
+cd GHES_CodingAgent
+sudo ./scripts/setup-runner.sh
 ```
 
-**If the runner cannot reach github.com**, download the binary on another machine and transfer it:
+**For Windows runners:**
 
 ```powershell
-# On a machine with internet access (PowerShell)
-curl -L -o gh.tar.gz "https://github.com/cli/cli/releases/download/v2.62.0/gh_2.62.0_linux_amd64.tar.gz"
-
-# Transfer to runner via SCP
-scp gh.tar.gz user@<runner-ip>:/tmp/
+# On the runner machine (PowerShell as Administrator)
+git clone https://<your-ghes-host>/<your-org>/GHES_CodingAgent.git
+cd GHES_CodingAgent
+.\scripts\setup-runner.ps1
 ```
 
-Then on the runner:
-```bash
-cd /tmp
-tar -xzf gh.tar.gz
-sudo mv gh_2.62.0_linux_amd64/bin/gh /usr/local/bin/
-sudo chmod +x /usr/local/bin/gh
-gh --version
-```
+The setup script installs:
+- GitHub CLI (gh) v2.62.0
+- Node.js 22.x
+- Python 3.x
+- uv/uvx
+- GitHub Copilot CLI
 
-#### Other Requirements
+#### Manual Installation (If Automated Setup Fails)
 
-- **Node.js 22.x** - Installed automatically by workflow via `actions/setup-node`
-- **Python 3.x** - Installed automatically by workflow via `actions/setup-python`
+If the setup script cannot reach external repositories, you can download all installers on a machine with internet access and transfer them to the runner. See the setup script source code for detailed installation steps and exact versions.
 
 #### Runner Labels
 
@@ -291,13 +355,12 @@ runs-on: [self-hosted, linux]
 
 Monitor workflow execution times:
 
-- **Average execution**: 3-5 minutes
-- **Cache hit rate**: Should be >80% after first run
+- **Average execution**: 2-4 minutes (faster with pre-installed software)
 - **Success rate**: Should be >90%
 
 ### Regular Maintenance
 
-1. **Update Copilot CLI**: Bump `COPILOT_VERSION` when new versions are available
+1. **Update runner software**: Periodically run the setup script to update to newer versions
 2. **Review logs**: Check for MCP server issues
 3. **Update dependencies**: Keep MCP servers updated
 4. **Clean up branches**: Delete merged feature branches
@@ -305,6 +368,17 @@ Monitor workflow execution times:
 ## 🆘 Troubleshooting
 
 ### Common Issues
+
+#### ❌ Software Not Found Errors
+
+**Error**: `command not found: node`, `command not found: copilot`, etc.
+
+**Cause**: Required software is not pre-installed on the runner.
+
+**Solution**:
+1. SSH/RDP into the runner machine
+2. Run the setup script: `sudo ./scripts/setup-runner.sh` (Linux/Mac) or `.\scripts\setup-runner.ps1` (Windows)
+3. Verify all software is installed correctly
 
 #### ❌ GitHub CLI Authentication Failed (HTTP 401)
 
@@ -338,12 +412,6 @@ Monitor workflow execution times:
 4. **Update the repository secret**:
    - Go to repository Settings → Secrets and variables → Actions
    - Update `GH_TOKEN` with the new GHES token
-
-#### ❌ GitHub CLI Not Found
-
-**Error**: `gh: command not found`
-
-**Solution**: GitHub CLI must be manually installed on self-hosted runners. See [Self-Hosted Runners](#self-hosted-runners) section above.
 
 For more issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 

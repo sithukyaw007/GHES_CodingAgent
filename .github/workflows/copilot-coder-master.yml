@@ -110,49 +110,61 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
       
-      - name: 🐍 Setup Python (Latest)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      
-      - name: 📦 Install uv/uvx
+      - name: ✅ Verify Pre-installed Software
         run: |
-          echo "Installing uvx (pipx runner)..."
-          pip install --upgrade pip
-          pip install uv
-          echo "✅ Python and uv installed"
-          python --version
-          uv --version
-      
-      - name: ⚙️ Setup Node.js 22.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
-      
-      - name: 🔍 Detect NPM Global Path
-        id: npm-path
-        run: |
-          NPM_PREFIX=$(npm config get prefix)
-          echo "NPM_GLOBAL_PATH=${NPM_PREFIX}/lib/node_modules" >> $GITHUB_ENV
-          echo "NPM global path: ${NPM_PREFIX}/lib/node_modules"
-      
-      - name: 📦 Cache Global NPM Packages
-        uses: actions/cache@v3
-        with:
-          key: npm-global-${{ runner.os }}-copilot-${{ env.COPILOT_VERSION }}
-          path: ${{ env.NPM_GLOBAL_PATH }}
-          restore-keys: |
-            npm-global-${{ runner.os }}-copilot-
-      
-      - name: 📦 Install Copilot CLI
-        run: |
-          if ! command -v copilot &> /dev/null; then
-            echo "Installing @github/copilot@${{ env.COPILOT_VERSION }}..."
-            npm install -g @github/copilot@${{ env.COPILOT_VERSION }}
+          echo "🔍 Verifying pre-installed software..."
+          echo "═══════════════════════════════════════════════════════════"
+          
+          # Check Python
+          if command -v python3 &> /dev/null; then
+            PYTHON_VERSION=$(python3 --version)
+            echo "✅ Python: $PYTHON_VERSION"
           else
-            echo "✅ @github/copilot already installed (from cache)"
-            copilot --version
+            echo "❌ ERROR: Python 3 is not installed!"
+            echo "Please run scripts/setup-runner.sh on this runner."
+            exit 1
           fi
+          
+          # Check uv
+          if command -v uv &> /dev/null; then
+            UV_VERSION=$(uv --version)
+            echo "✅ uv: $UV_VERSION"
+          else
+            echo "❌ ERROR: uv is not installed!"
+            echo "Please run scripts/setup-runner.sh on this runner."
+            exit 1
+          fi
+          
+          # Check Node.js
+          if command -v node &> /dev/null; then
+            NODE_VERSION=$(node --version)
+            NPM_VERSION=$(npm --version)
+            echo "✅ Node.js: $NODE_VERSION"
+            echo "✅ npm: $NPM_VERSION"
+            
+            # Verify Node.js major version is 22
+            NODE_MAJOR=$(echo $NODE_VERSION | cut -d. -f1 | sed 's/v//')
+            if [ "$NODE_MAJOR" != "22" ]; then
+              echo "⚠️  WARNING: Node.js 22.x is recommended, but $NODE_VERSION is installed."
+            fi
+          else
+            echo "❌ ERROR: Node.js is not installed!"
+            echo "Please run scripts/setup-runner.sh on this runner."
+            exit 1
+          fi
+          
+          # Check GitHub Copilot CLI
+          if command -v copilot &> /dev/null; then
+            COPILOT_VERSION_INSTALLED=$(copilot --version 2>&1 | head -n1)
+            echo "✅ Copilot CLI: $COPILOT_VERSION_INSTALLED"
+          else
+            echo "❌ ERROR: GitHub Copilot CLI is not installed!"
+            echo "Please run scripts/setup-runner.sh on this runner."
+            exit 1
+          fi
+          
+          echo "═══════════════════════════════════════════════════════════"
+          echo "✅ All required software is installed and ready!"
       
       - name: ⚙️ Configure MCP Servers
         run: |

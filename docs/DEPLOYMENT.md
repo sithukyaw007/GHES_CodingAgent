@@ -8,12 +8,27 @@ Before deploying, ensure these prerequisites are met:
 
 ### Self-Hosted Runner Requirements
 
+All software must be pre-installed on the runner using the setup script. The workflows no longer install software at runtime for better performance.
+
 | Component | Required | Installation |
 |-----------|----------|--------------|
-| **GitHub CLI (`gh`)** | ✅ Yes | Must be pre-installed manually |
-| **Node.js 22.x** | ✅ Yes | Installed automatically by workflow |
-| **Python 3.x** | ✅ Yes | Installed automatically by workflow |
-| **uv/uvx** | ✅ Yes | Installed automatically by workflow |
+| **GitHub CLI (`gh`)** | ✅ Yes | **Pre-install using setup script** |
+| **Node.js 22.x** | ✅ Yes | **Pre-install using setup script** |
+| **Python 3.x** | ✅ Yes | **Pre-install using setup script** |
+| **uv/uvx** | ✅ Yes | **Pre-install using setup script** |
+| **GitHub Copilot CLI** | ✅ Yes | **Pre-install using setup script** |
+
+**⚠️ IMPORTANT:** All software must be installed ONCE on each runner before running any workflows. Use the provided setup script:
+
+**Linux/Mac:**
+```bash
+sudo ./scripts/setup-runner.sh
+```
+
+**Windows (PowerShell as Administrator):**
+```powershell
+.\scripts\setup-runner.ps1
+```
 
 ### Organization or Repository Secrets
 
@@ -75,9 +90,9 @@ Only **2 small files** are deployed to target repositories:
 
 ### After Running the Script
 
-1. **Review and merge** the created PR
-2. **Add repository secrets** (see below)
-3. **Verify runner setup** (GitHub CLI installed)
+1. **Verify pre-installed software** on the runner
+2. **Review and merge** the created PR  
+3. **Add repository secrets** (see below)
 
 ---
 
@@ -106,38 +121,46 @@ The `GH_TOKEN` **must be a Classic PAT** created on your GHES instance (not gith
 
 ## 🖥️ Self-Hosted Runner Setup
 
-### Install GitHub CLI (Required)
+### One-Time Software Installation (Required)
+
+All required software must be pre-installed on each runner before executing any workflows. We provide automated setup scripts for this purpose.
+
+#### Linux/Mac Setup
 
 SSH into your runner VM and run:
 
 ```bash
-# Download GitHub CLI
-GH_VERSION="2.62.0"
-cd /tmp
-curl -L -o gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"
+# Clone or download the GHES_CodingAgent repository
+git clone <your-ghes-host>/your-org/GHES_CodingAgent.git
+cd GHES_CodingAgent
 
-# Extract and install
-tar -xzf gh.tar.gz
-sudo mv gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/
-sudo chmod +x /usr/local/bin/gh
-
-# Verify
-gh --version
+# Run the setup script
+sudo ./scripts/setup-runner.sh
 ```
 
-### If Runner Cannot Reach github.com
+The script will install:
+- GitHub CLI (gh) v2.62.0
+- Node.js 22.x
+- Python 3.x
+- uv/uvx (Python package installer)
+- GitHub Copilot CLI
 
-Download the binary on another machine and transfer:
+#### Windows Setup
+
+Run PowerShell as Administrator and execute:
 
 ```powershell
-# On a machine with internet access
-curl -L -o gh.tar.gz "https://github.com/cli/cli/releases/download/v2.62.0/gh_2.62.0_linux_amd64.tar.gz"
+# Clone or download the GHES_CodingAgent repository
+git clone <your-ghes-host>/your-org/GHES_CodingAgent.git
+cd GHES_CodingAgent
 
-# Transfer to runner
-scp gh.tar.gz user@<runner-ip>:/tmp/
+# Run the setup script
+.\scripts\setup-runner.ps1
 ```
 
-Then install on the runner as shown above.
+#### Manual Installation (If Automatic Setup Fails)
+
+If your runner cannot reach external package repositories, you may need to download binaries on another machine and transfer them to the runner. See the setup script source code for detailed manual installation instructions.
 
 ---
 
@@ -145,12 +168,26 @@ Then install on the runner as shown above.
 
 After deployment, verify everything is set up correctly:
 
+- [ ] **All software pre-installed on runner** (run `scripts/setup-runner.sh` or `setup-runner.ps1`)
 - [ ] Workflows visible in **Actions** tab
 - [ ] All 3 labels created (`copilot`, `in-progress`, `ready-for-review`)
 - [ ] `GH_TOKEN` secret configured
 - [ ] `COPILOT_TOKEN` secret configured
-- [ ] GitHub CLI installed on runner (`gh --version`)
 - [ ] Runner is online and idle
+
+### Verify Runner Software
+
+SSH/RDP into your runner and verify all required software:
+
+```bash
+# Check all required components
+gh --version          # Should show v2.62.0 or later
+node --version        # Should show v22.x.x
+npm --version         # Should be installed with Node.js
+python3 --version     # Should show v3.x.x
+uv --version          # Should be installed
+copilot --version     # Should show installed version
+```
 
 ### Test the Setup
 
@@ -176,7 +213,10 @@ Since target repositories use **caller workflows** that reference the master wor
 
 | Issue | Solution |
 |-------|----------|
-| `gh: command not found` | Install GitHub CLI on runner |
+| `Software not found` errors in workflow | Run `scripts/setup-runner.sh` on the runner |
+| `gh: command not found` | Run setup script to install all software |
+| `node: command not found` | Run setup script to install all software |
+| `copilot: command not found` | Run setup script to install all software |
 | `HTTP 401: Bad credentials` | Token is invalid or from wrong server |
 | `Resource not accessible by personal access token` | Use Classic PAT instead of Fine-grained |
 
