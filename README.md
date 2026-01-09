@@ -44,22 +44,134 @@ This section walks you through the complete setup process, from infrastructure t
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        COMPLETE SETUP JOURNEY                               │
 │                                                                             │
-│  PHASE 0: Prerequisites          PHASE 1: Configuration    PHASE 2: Usage  │
-│  (One-time infrastructure)       (One-time setup)          (Daily use)     │
+│  💾 BACKUP            PHASE 0              PHASE 1           PHASE 2       │
+│  (Recommended)        Prerequisites        Configuration     Usage          │
 │                                                                             │
-│  ┌─────────────────────┐        ┌──────────────────┐      ┌─────────────┐  │
-│  │ 0.1 GHES Instance   │        │ 1.1 Clone Repo   │      │ Create      │  │
-│  │ 0.2 Self-Hosted     │───────▶│ 1.2 Add Secrets  │─────▶│ Issue +     │  │
-│  │     Runner VM       │        │ 1.3 Deploy to    │      │ Add Label   │  │
-│  │ 0.3 Network Access  │        │     Target Repos │      │ = Done! ✨  │  │
-│  └─────────────────────┘        └──────────────────┘      └─────────────┘  │
+│  ┌─────────────┐     ┌─────────────┐      ┌─────────────┐   ┌───────────┐  │
+│  │ Snapshot or │     │ GHES Setup  │      │ Clone Repo  │   │ Create    │  │
+│  │ GHES Backup │────▶│ Runner VM   │─────▶│ Add Secrets │──▶│ Issue +   │  │
+│  │ (Optional)  │     │ Network     │      │ Deploy      │   │ Add Label │  │
+│  └─────────────┘     └─────────────┘      └─────────────┘   └───────────┘  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📦 Phase 0: Prerequisites (Infrastructure Setup)
+## � Backup Considerations (Before You Begin)
+
+> **⚠️ Best Practice:** Always backup your GHES instance before making infrastructure changes.
+
+### Risk Assessment
+
+This solution has a **LOW risk profile** - it operates at the repository/organization level, not the GHES system level:
+
+| Component Modified | Risk Level | Reversible? |
+|-------------------|------------|-------------|
+| Creates new repositories | 🟢 Very Low | ✅ Delete repo |
+| Adds workflows to repos | 🟢 Very Low | ✅ Delete workflow files |
+| Configures secrets | 🟢 Very Low | ✅ Delete secrets |
+| Creates labels | 🟢 Very Low | ✅ Delete labels |
+| Registers self-hosted runner | 🟢 Very Low | ✅ Remove runner |
+| Enables Actions cross-repo access | 🟡 Low | ✅ Disable setting |
+
+**What this solution does NOT modify:**
+- ❌ GHES core configuration
+- ❌ GHES database directly
+- ❌ GHES system-level settings
+- ❌ Other repositories' content
+
+### Backup Recommendations by Environment
+
+| Environment | Backup Recommended? | Suggested Method |
+|-------------|---------------------|------------------|
+| **Production GHES** | ✅ **Yes, mandatory** | Full backup (GHES utilities + VM snapshot) |
+| **Staging/Test GHES** | ✅ Yes, recommended | VM snapshot |
+| **Dev/POC GHES** | 🟡 Optional | Quick snapshot if convenient |
+| **New/Empty GHES** | 🟢 Optional | Low risk, snapshot is quick |
+
+### Backup Options for GHES on Azure
+
+#### Option 1: Azure VM Snapshot (Quickest - 5-10 minutes)
+
+```bash
+# Create a snapshot of the GHES VM OS disk
+az snapshot create \
+  --resource-group <your-resource-group> \
+  --name ghes-pre-copilot-setup-$(date +%Y%m%d) \
+  --source <ghes-os-disk-id> \
+  --location <azure-region>
+
+# Verify snapshot was created
+az snapshot show \
+  --resource-group <your-resource-group> \
+  --name ghes-pre-copilot-setup-*
+```
+
+#### Option 2: GHES Backup Utilities (GitHub-Supported)
+
+```bash
+# On a SEPARATE backup host (not the GHES server)
+
+# 1. Clone the backup utilities
+git clone https://github.com/github/backup-utils.git
+cd backup-utils
+
+# 2. Configure backup settings
+cp backup.config-example backup.config
+# Edit backup.config:
+#   GHE_HOSTNAME="your-ghes-hostname"
+#   GHE_DATA_DIR="/path/to/backup/data"
+
+# 3. Run the backup
+./bin/ghe-backup
+
+# 4. Verify backup completed
+./bin/ghe-backup-progress
+```
+
+#### Option 3: Azure Backup Service (Managed)
+
+```bash
+# Enable Azure Backup for the GHES VM
+az backup protection enable-for-vm \
+  --resource-group <your-resource-group> \
+  --vault-name <recovery-vault-name> \
+  --vm <ghes-vm-name> \
+  --policy-name DefaultPolicy
+
+# Trigger an immediate backup
+az backup protection backup-now \
+  --resource-group <your-resource-group> \
+  --vault-name <recovery-vault-name> \
+  --container-name <container-name> \
+  --item-name <ghes-vm-name> \
+  --retain-until <date>
+```
+
+### Pre-Setup Backup Checklist
+
+- [ ] **Create backup** using one of the methods above
+- [ ] **Verify backup completed** successfully
+- [ ] **Document current state:**
+  - [ ] Actions enabled status
+  - [ ] Existing org-level secrets
+  - [ ] Existing self-hosted runners
+  - [ ] Current repository count
+- [ ] **Test restore process** (optional but recommended for production)
+
+### Rollback Plan
+
+If something goes wrong during setup:
+
+1. **For repository-level issues:** Delete the `GHES_CodingAgent` repo and any deployed workflows
+2. **For runner issues:** Remove the self-hosted runner from GHES settings
+3. **For secrets issues:** Delete the secrets from org/repo settings
+4. **For full rollback:** Restore from VM snapshot or GHES backup
+
+---
+
+## �📦 Phase 0: Prerequisites (Infrastructure Setup)
 
 > **⏱️ Time Required:** 1-2 hours (one-time setup)
 
